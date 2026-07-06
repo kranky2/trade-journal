@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { fmt, todayStr } from '../lib/metrics.js'
+import { fmt, todayStr, buildChains } from '../lib/metrics.js'
 import { Ticks } from './Overview.jsx'
 
 const BLANK = {
@@ -17,6 +17,10 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState('all')
+  const [chainsOpen, setChainsOpen] = useState(true)
+  const [expandedChain, setExpandedChain] = useState(null)
+
+  const chains = useMemo(() => buildChains(trades), [trades])
 
   const tradeById = useMemo(() => Object.fromEntries(trades.map((t) => [t.id, t])), [trades])
 
@@ -129,6 +133,56 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
     <>
       {editing === null && (
         <>
+          {chains.length > 0 && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', cursor: 'pointer' }}
+                onClick={() => setChainsOpen((v) => !v)}>
+                <h3>Position chains <span className="muted small">({chains.length})</span></h3>
+                <span className="muted small">{chainsOpen ? '▾ collapse' : '▸ expand'}</span>
+              </div>
+              {chainsOpen && (
+                <table className="table" style={{ marginTop: 10 }}>
+                  <thead>
+                    <tr>
+                      <th>Symbol</th><th>Legs</th><th>Span</th><th>Status</th><th>Net P&L</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chains.map((c, idx) => (
+                      <Fragment key={c.root.id}>
+                        <tr className="rowlink"
+                          onClick={() => setExpandedChain(expandedChain === idx ? null : idx)}>
+                          <td className="num">{c.root.symbol}</td>
+                          <td className="num">{c.legs.length}</td>
+                          <td className="small">{c.start} → {c.end || 'open'} <span className="muted">({c.days}d)</span></td>
+                          <td><span className={`badge ${c.isOpen ? 'open' : ''}`}>{c.isOpen ? 'open' : 'closed'}</span></td>
+                          <td className={`num ${c.totalPnl >= 0 ? 'gain' : 'loss'}`}>{fmt(c.totalPnl)}</td>
+                          <td className="muted small">{expandedChain === idx ? '▾' : '▸'}</td>
+                        </tr>
+                        {expandedChain === idx && c.legs.map((leg) => (
+                          <tr key={leg.id} className="rowlink" onClick={() => startEdit(leg)}>
+                            <td colSpan={2} className="small muted" style={{ paddingLeft: 24 }}>
+                              {leg.instrument} · {leg.entry_date}{leg.exit_date ? ` → ${leg.exit_date}` : ' (open)'}
+                            </td>
+                            <td colSpan={2} className="small muted">{leg.direction}</td>
+                            <td className={`num small ${leg.pnl == null ? 'muted' : leg.pnl >= 0 ? 'gain' : 'loss'}`}>
+                              {leg.pnl == null ? '—' : fmt(Number(leg.pnl))}
+                            </td>
+                            <td></td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div className="small muted" style={{ marginTop: 8 }}>
+                Groups trades linked via "Roll into new trade" or assignment — a wheel cycle from put to shares
+                to calls shows as one chain. Click a row to expand its legs, click a leg to open it.
+              </div>
+            </div>
+          )}
+
           <div className="btnrow" style={{ marginTop: 0, marginBottom: 14, justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', gap: 6 }}>
               {['all', 'open', 'closed'].map((f) => (

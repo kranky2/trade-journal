@@ -50,3 +50,43 @@ export const todayStr = () => {
   const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())
   return p // en-CA gives YYYY-MM-DD
 }
+
+export function buildChains(trades) {
+  const byId = Object.fromEntries(trades.map((t) => [t.id, t]))
+  const rootOf = (t) => {
+    let cur = t
+    const seen = new Set()
+    while (cur.parent_trade_id && byId[cur.parent_trade_id] && !seen.has(cur.id)) {
+      seen.add(cur.id)
+      cur = byId[cur.parent_trade_id]
+    }
+    return cur.id
+  }
+  const groups = {}
+  for (const t of trades) {
+    const root = rootOf(t)
+    if (!groups[root]) groups[root] = []
+    groups[root].push(t)
+  }
+  return Object.values(groups)
+    .map((legs) => legs.slice().sort((a, b) => (a.entry_date < b.entry_date ? -1 : 1)))
+    .filter((legs) => legs.length > 1) // only actual chains, single trades show in the normal list
+    .map((legs) => {
+      const closedLegs = legs.filter((l) => l.status === 'closed' && l.pnl !== null && l.pnl !== undefined)
+      const totalPnl = closedLegs.reduce((s, l) => s + Number(l.pnl), 0)
+      const isOpen = legs.some((l) => l.status === 'open')
+      const start = legs[0].entry_date
+      const lastLeg = legs[legs.length - 1]
+      const end = lastLeg.exit_date || null
+      const days = end ? daysBetween(start, end) : daysBetween(start, todayStr())
+      return { legs, totalPnl, isOpen, start, end, days, root: legs[0] }
+    })
+    .sort((a, b) => (b.end || '9999') > (a.end || '9999') ? 1 : -1)
+}
+
+function daysBetween(a, b) {
+  const d1 = new Date(a + 'T00:00:00Z')
+  const d2 = new Date(b + 'T00:00:00Z')
+  return Math.round((d2 - d1) / 86400000)
+}
+
