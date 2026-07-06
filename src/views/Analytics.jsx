@@ -68,6 +68,45 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
       .sort((a, b) => b.brokenCount - a.brokenCount)
   }, [checksByTrade, closedById, ruleById])
 
+  // ----- session window performance (uses entry_time, any instrument) -----
+  const withTime = closed.filter((t) => t.entry_time)
+  const sessionStats = useMemo(() => {
+    const buckets = {
+      'Tokyo (00:00–08:00 UTC)': [],
+      'London (07:00–16:00 UTC)': [],
+      'New York (12:00–21:00 UTC)': [],
+      'Off-hours': [],
+    }
+    for (const t of withTime) {
+      const hour = Number(t.entry_time.split(':')[0])
+      // SGT is UTC+8 — convert stored local (SGT) time to UTC hour for session buckets
+      const utcHour = (hour - 8 + 24) % 24
+      if (utcHour >= 0 && utcHour < 8) buckets['Tokyo (00:00–08:00 UTC)'].push(t)
+      else if (utcHour >= 7 && utcHour < 12) buckets['London (07:00–16:00 UTC)'].push(t)
+      else if (utcHour >= 12 && utcHour < 16) { buckets['London (07:00–16:00 UTC)'].push(t); buckets['New York (12:00–21:00 UTC)'].push(t) }
+      else if (utcHour >= 16 && utcHour < 21) buckets['New York (12:00–21:00 UTC)'].push(t)
+      else buckets['Off-hours'].push(t)
+    }
+    return Object.entries(buckets).map(([label, trades]) => ({ label, stats: computeStats(trades) }))
+      .filter((r) => r.stats.count > 0)
+  }, [withTime])
+
+  // ----- delta bucket performance (options only) -----
+  const withDelta = closed.filter((t) => t.delta_entry !== null && t.delta_entry !== undefined && (t.instrument === 'option' || t.instrument === 'spread'))
+  const deltaBuckets = useMemo(() => {
+    const ranges = [
+      { label: '< 0.16Δ', test: (d) => d < 0.16 },
+      { label: '0.16–0.25Δ', test: (d) => d >= 0.16 && d < 0.25 },
+      { label: '0.25–0.35Δ', test: (d) => d >= 0.25 && d < 0.35 },
+      { label: '0.35–0.50Δ', test: (d) => d >= 0.35 && d < 0.50 },
+      { label: '≥ 0.50Δ', test: (d) => d >= 0.50 },
+    ]
+    return ranges.map((r) => ({
+      label: r.label,
+      stats: computeStats(withDelta.filter((t) => r.test(Math.abs(Number(t.delta_entry))))),
+    })).filter((r) => r.stats.count > 0)
+  }, [withDelta])
+
   if (closed.length === 0) {
     return (
       <div className="card">
@@ -168,6 +207,54 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
           <div className="small muted" style={{ marginTop: 8 }}>
             Small sample sizes lie. Treat anything under ~10 broken instances as a hint, not a verdict.
           </div>
+        </div>
+      )}
+
+      {sessionStats.length > 0 && (
+        <div className="card">
+          <h3>Performance by session window</h3>
+          <table className="table">
+            <thead>
+              <tr><th>Session</th><th>Trades</th><th>Win rate</th><th>Profit factor</th><th>Avg P&L</th></tr>
+            </thead>
+            <tbody>
+              {sessionStats.map((r) => (
+                <tr key={r.label}>
+                  <td>{r.label}</td>
+                  <td className="num">{r.stats.count}</td>
+                  <td className="num">{fmtPct(r.stats.winRate)}</td>
+                  <td className="num">{fmtPF(r.stats.profitFactor)}</td>
+                  <td className={`num ${toneCls(r.stats.expectancy)}`}>{fmt(r.stats.expectancy)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Bucketed from entry time (Tokyo/London/NY overlap hours in UTC). Sessions overlap by design —
+            a trade entered during the London/NY overlap counts toward both.
+          </div>
+        </div>
+      )}
+
+      {deltaBuckets.length > 0 && (
+        <div className="card">
+          <h3>Performance by entry delta</h3>
+          <table className="table">
+            <thead>
+              <tr><th>Delta band</th><th>Trades</th><th>Win rate</th><th>Profit factor</th><th>Avg P&L</th></tr>
+            </thead>
+            <tbody>
+              {deltaBuckets.map((r) => (
+                <tr key={r.label}>
+                  <td className="num">{r.label}</td>
+                  <td className="num">{r.stats.count}</td>
+                  <td className="num">{fmtPct(r.stats.winRate)}</td>
+                  <td className="num">{fmtPF(r.stats.profitFactor)}</td>
+                  <td className={`num ${toneCls(r.stats.expectancy)}`}>{fmt(r.stats.expectancy)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

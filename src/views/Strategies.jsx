@@ -27,7 +27,7 @@ export default function Strategies({ strategies, rulesByStrategy, refresh }) {
           </div>
           <div className="field wide">
             <label>Description</label>
-            <input value={desc} onChange={(e) => setDesc(e.target.value)}
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)}
               placeholder="What this strategy is, when it applies" />
           </div>
         </div>
@@ -90,7 +90,7 @@ function StrategyCard({ strategy, rules, refresh }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         <div>
           <h3 style={{ marginBottom: 2 }}>{strategy.name}</h3>
-          {strategy.description && <div className="small muted">{strategy.description}</div>}
+          {strategy.description && <div className="small muted" style={{ whiteSpace: 'pre-wrap' }}>{strategy.description}</div>}
         </div>
         <button className="btn danger sm" onClick={removeStrategy}>Delete</button>
       </div>

@@ -5,8 +5,9 @@ import { Ticks } from './Overview.jsx'
 
 const BLANK = {
   symbol: '', strategy_id: '', instrument: 'option', direction: 'neutral',
-  status: 'open', entry_date: '', exit_date: '', quantity: '', entry_price: '',
-  exit_price: '', fees: '', pnl: '', thesis: '', notes: '', parent_trade_id: null,
+  status: 'open', entry_date: '', exit_date: '', entry_time: '', exit_time: '',
+  quantity: '', entry_price: '', exit_price: '', delta_entry: '', delta_exit: '',
+  fees: '', pnl: '', thesis: '', notes: '', parent_trade_id: null,
 }
 
 export default function Trades({ trades, strategies, rulesByStrategy, checksByTrade, strategyById, refresh }) {
@@ -37,6 +38,8 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       exit_price: t.exit_price ?? '', fees: t.fees ?? '', pnl: t.pnl ?? '',
       exit_date: t.exit_date ?? '', thesis: t.thesis ?? '', notes: t.notes ?? '',
       strategy_id: t.strategy_id ?? '',
+      entry_time: t.entry_time ?? '', exit_time: t.exit_time ?? '',
+      delta_entry: t.delta_entry ?? '', delta_exit: t.delta_exit ?? '',
     })
     const existing = {}
     for (const c of checksByTrade[t.id] || []) existing[c.rule_id] = c.followed
@@ -68,9 +71,13 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       status: form.status,
       entry_date: form.entry_date,
       exit_date: form.exit_date || null,
+      entry_time: form.entry_time || null,
+      exit_time: form.exit_time || null,
       quantity: numOrNull(form.quantity),
       entry_price: numOrNull(form.entry_price),
       exit_price: numOrNull(form.exit_price),
+      delta_entry: numOrNull(form.delta_entry),
+      delta_exit: numOrNull(form.delta_exit),
       fees: numOrNull(form.fees) ?? 0,
       pnl: numOrNull(form.pnl),
       thesis: form.thesis || null,
@@ -213,8 +220,16 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
               <input type="date" value={form.entry_date} onChange={set('entry_date')} />
             </div>
             <div className="field">
+              <label>Entry time {form.instrument === 'fx' && <span className="muted">(session)</span>}</label>
+              <input type="time" value={form.entry_time} onChange={set('entry_time')} />
+            </div>
+            <div className="field">
               <label>Exit date</label>
               <input type="date" value={form.exit_date} onChange={set('exit_date')} />
+            </div>
+            <div className="field">
+              <label>Exit time</label>
+              <input type="time" value={form.exit_time} onChange={set('exit_time')} />
             </div>
             <div className="field">
               <label>Quantity</label>
@@ -228,6 +243,18 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
               <label>Exit price</label>
               <input inputMode="decimal" value={form.exit_price} onChange={set('exit_price')} />
             </div>
+            {(form.instrument === 'option' || form.instrument === 'spread') && (
+              <>
+                <div className="field">
+                  <label>Delta at entry</label>
+                  <input inputMode="decimal" value={form.delta_entry} onChange={set('delta_entry')} placeholder="0.16" />
+                </div>
+                <div className="field">
+                  <label>Delta at close</label>
+                  <input inputMode="decimal" value={form.delta_exit} onChange={set('delta_exit')} placeholder="0.42" />
+                </div>
+              </>
+            )}
             <div className="field">
               <label>Fees</label>
               <input inputMode="decimal" value={form.fees} onChange={set('fees')} placeholder="0" />
