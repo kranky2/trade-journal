@@ -1,8 +1,12 @@
 import { useMemo } from 'react'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, ReferenceLine,
+  ScatterChart, Scatter, ZAxis, Cell,
 } from 'recharts'
-import { computeStats, closedWithPnl, tradeAdherence, avgAdherence, fmt, fmtPct, fmtPF } from '../lib/metrics.js'
+import {
+  computeStats, closedWithPnl, tradeAdherence, avgAdherence, fmt, fmtPct, fmtPF,
+  pctCaptured, dteAtExit, realizedR, plannedRR,
+} from '../lib/metrics.js'
 
 export default function Analytics({ trades, strategies, rules, checksByTrade }) {
   const closed = useMemo(
@@ -107,6 +111,36 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
     })).filter((r) => r.stats.count > 0)
   }, [withDelta])
 
+  // ----- CSP/option premium: % captured vs DTE remaining at exit -----
+  const captureRows = useMemo(() => {
+    return closed
+      .filter((t) => (t.instrument === 'option' || t.instrument === 'spread') && t.expiry_date)
+      .map((t) => ({
+        symbol: t.symbol,
+        pct: pctCaptured(t),
+        dte: dteAtExit(t),
+        plannedPct: t.planned_target_pct !== null && t.planned_target_pct !== undefined ? Number(t.planned_target_pct) : null,
+        heldToExpiry: dteAtExit(t) === 0,
+      }))
+      .filter((r) => r.pct !== null && r.dte !== null)
+  }, [closed])
+
+  // ----- directional: planned R:R vs realized R -----
+  const rRows = useMemo(() => {
+    return closed
+      .filter((t) => t.planned_stop !== null && t.planned_stop !== undefined)
+      .map((t) => ({
+        trade: t,
+        planned: plannedRR(t),
+        realized: realizedR(t),
+      }))
+      .filter((r) => r.realized !== null)
+  }, [closed])
+  const avgRealizedR = rRows.length ? rRows.reduce((s, r) => s + r.realized, 0) / rRows.length : null
+  const avgPlannedR = rRows.filter((r) => r.planned !== null).length
+    ? rRows.filter((r) => r.planned !== null).reduce((s, r) => s + r.planned, 0) / rRows.filter((r) => r.planned !== null).length
+    : null
+
   if (closed.length === 0) {
     return (
       <div className="card">
@@ -149,6 +183,85 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
           </ResponsiveContainer>
         </div>
       </div>
+
+      {captureRows.length > 0 && (
+        <div className="card">
+          <h3>Premium capture vs. time remaining</h3>
+          <div style={{ width: '100%', height: 280 }}>
+            <ResponsiveContainer>
+              <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                <XAxis
+                  type="number" dataKey="dte" name="DTE at exit" reversed
+                  domain={[-1, 'dataMax + 2']}
+                  tick={{ fill: '#8b96ab', fontSize: 11, fontFamily: 'IBM Plex Mono' }}
+                  axisLine={{ stroke: '#233048' }} tickLine={false}
+                  label={{ value: 'Days to expiry remaining at exit', position: 'insideBottom', offset: -4, fill: '#8b96ab', fontSize: 11 }}
+                />
+                <YAxis
+                  type="number" dataKey="pct" name="% captured" domain={[0, 110]}
+                  tick={{ fill: '#8b96ab', fontSize: 11, fontFamily: 'IBM Plex Mono' }}
+                  axisLine={false} tickLine={false} width={60}
+                  label={{ value: '% of premium captured', angle: -90, position: 'insideLeft', fill: '#8b96ab', fontSize: 11 }}
+                />
+                <ZAxis range={[80, 80]} />
+                <Tooltip
+                  cursor={{ strokeDasharray: '3 3' }}
+                  contentStyle={{ background: '#182234', border: '1px solid #233048', borderRadius: 8, fontFamily: 'IBM Plex Mono', fontSize: 12 }}
+                  labelStyle={{ color: '#8b96ab' }} itemStyle={{ color: '#e7ecf5' }}
+                  formatter={(value, name) => [Math.round(value * 10) / 10, name]}
+                  labelFormatter={() => ''}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const p = payload[0].payload
+                    return (
+                      <div style={{ background: '#182234', border: '1px solid #233048', borderRadius: 8, padding: 8, fontFamily: 'IBM Plex Mono', fontSize: 12 }}>
+                        <div style={{ color: '#e7ecf5' }}>{p.symbol}</div>
+                        <div style={{ color: '#8b96ab' }}>{Math.round(p.pct)}% captured, {p.dte}d left</div>
+                      </div>
+                    )
+                  }}
+                />
+                <Scatter data={captureRows.filter((r) => !r.heldToExpiry)} fill="#38c98e" name="Closed early" />
+                <Scatter data={captureRows.filter((r) => r.heldToExpiry)} fill="#e9a53c" shape="triangle" name="Held to expiry" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            <span style={{ color: '#38c98e' }}>●</span> closed early &nbsp;
+            <span style={{ color: '#e9a53c' }}>▲</span> held to expiry / assigned. Your decision zone is
+            the top-right corner — high % captured, little time left.
+          </div>
+        </div>
+      )}
+
+      {rRows.length > 0 && (
+        <div className="card">
+          <h3>Plan vs realized — directional trades</h3>
+          <div className="statrow" style={{ marginBottom: 12 }}>
+            <Stat label="Avg planned R:R" value={avgPlannedR === null ? '—' : avgPlannedR.toFixed(2)} />
+            <Stat label="Avg realized R" value={avgRealizedR === null ? '—' : avgRealizedR.toFixed(2)} tone={avgRealizedR} />
+          </div>
+          <table className="table">
+            <thead>
+              <tr><th>Symbol</th><th>Date</th><th>Planned R:R</th><th>Realized R</th></tr>
+            </thead>
+            <tbody>
+              {rRows.map(({ trade, planned, realized }) => (
+                <tr key={trade.id}>
+                  <td className="num">{trade.symbol}</td>
+                  <td className="num small">{trade.exit_date}</td>
+                  <td className="num">{planned === null ? '—' : planned.toFixed(2)}</td>
+                  <td className={`num ${realized >= 0 ? 'gain' : 'loss'}`}>{realized.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Realized R below planned R:R usually means late entries, early exits, or slippage eating into
+            the setup's edge — worth a look if this trends negative over time.
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>Plan vs tape — does discipline pay?</h3>

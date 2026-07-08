@@ -7,6 +7,7 @@ const BLANK = {
   symbol: '', strategy_id: '', instrument: 'option', direction: 'neutral',
   status: 'open', entry_date: '', exit_date: '', entry_time: '', exit_time: '',
   quantity: '', entry_price: '', exit_price: '', delta_entry: '', delta_exit: '',
+  expiry_date: '', planned_target_pct: '50', planned_stop: '', planned_target: '',
   fees: '', pnl: '', thesis: '', notes: '', parent_trade_id: null,
 }
 
@@ -44,6 +45,9 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       strategy_id: t.strategy_id ?? '',
       entry_time: t.entry_time ?? '', exit_time: t.exit_time ?? '',
       delta_entry: t.delta_entry ?? '', delta_exit: t.delta_exit ?? '',
+      expiry_date: t.expiry_date ?? '',
+      planned_target_pct: t.planned_target_pct ?? '',
+      planned_stop: t.planned_stop ?? '', planned_target: t.planned_target ?? '',
     })
     const existing = {}
     for (const c of checksByTrade[t.id] || []) existing[c.rule_id] = c.followed
@@ -63,6 +67,7 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const activeRules = form.strategy_id ? (rulesByStrategy[form.strategy_id] || []).filter((r) => r.active) : []
+  const isOption = form.instrument === 'option' || form.instrument === 'spread'
 
   const save = async () => {
     setBusy(true); setErr(null)
@@ -82,6 +87,10 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       exit_price: numOrNull(form.exit_price),
       delta_entry: numOrNull(form.delta_entry),
       delta_exit: numOrNull(form.delta_exit),
+      expiry_date: isOption ? (form.expiry_date || null) : null,
+      planned_target_pct: isOption ? numOrNull(form.planned_target_pct) : null,
+      planned_stop: !isOption ? numOrNull(form.planned_stop) : null,
+      planned_target: !isOption ? numOrNull(form.planned_target) : null,
       fees: numOrNull(form.fees) ?? 0,
       pnl: numOrNull(form.pnl),
       thesis: form.thesis || null,
@@ -297,7 +306,7 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
               <label>Exit price</label>
               <input inputMode="decimal" value={form.exit_price} onChange={set('exit_price')} />
             </div>
-            {(form.instrument === 'option' || form.instrument === 'spread') && (
+            {isOption && (
               <>
                 <div className="field">
                   <label>Delta at entry</label>
@@ -306,6 +315,26 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
                 <div className="field">
                   <label>Delta at close</label>
                   <input inputMode="decimal" value={form.delta_exit} onChange={set('delta_exit')} placeholder="0.42" />
+                </div>
+                <div className="field">
+                  <label>Expiry date</label>
+                  <input type="date" value={form.expiry_date} onChange={set('expiry_date')} />
+                </div>
+                <div className="field">
+                  <label>Planned target — % of max profit</label>
+                  <input inputMode="decimal" value={form.planned_target_pct} onChange={set('planned_target_pct')} placeholder="50" />
+                </div>
+              </>
+            )}
+            {!isOption && (
+              <>
+                <div className="field">
+                  <label>Planned stop (price)</label>
+                  <input inputMode="decimal" value={form.planned_stop} onChange={set('planned_stop')} placeholder="optional" />
+                </div>
+                <div className="field">
+                  <label>Planned target (price)</label>
+                  <input inputMode="decimal" value={form.planned_target} onChange={set('planned_target')} placeholder="optional" />
                 </div>
               </>
             )}

@@ -90,3 +90,51 @@ function daysBetween(a, b) {
   return Math.round((d2 - d1) / 86400000)
 }
 
+// ---- option premium capture ----
+export function pctCaptured(t) {
+  if (!t.entry_price || t.exit_price === null || t.exit_price === undefined) return null
+  const entry = Number(t.entry_price)
+  if (entry === 0) return null
+  return ((entry - Number(t.exit_price)) / entry) * 100
+}
+
+export function dteAtExit(t) {
+  if (!t.expiry_date || !t.exit_date) return null
+  return daysBetween(t.exit_date, t.expiry_date)
+}
+
+export function dteAtEntry(t) {
+  if (!t.expiry_date || !t.entry_date) return null
+  return daysBetween(t.entry_date, t.expiry_date)
+}
+
+export function dteNow(t) {
+  if (!t.expiry_date) return null
+  return daysBetween(todayStr(), t.expiry_date)
+}
+
+// ---- price-based plan vs realized (directional strategies) ----
+export function realizedR(t) {
+  if (t.planned_stop === null || t.planned_stop === undefined) return null
+  if (!t.entry_price || t.exit_price === null || t.exit_price === undefined) return null
+  const entry = Number(t.entry_price)
+  const stop = Number(t.planned_stop)
+  const exit = Number(t.exit_price)
+  const risk = t.direction === 'short' ? stop - entry : entry - stop
+  if (risk === 0) return null
+  const move = t.direction === 'short' ? entry - exit : exit - entry
+  return move / risk
+}
+
+export function plannedRR(t) {
+  if (t.planned_stop === null || t.planned_stop === undefined) return null
+  if (t.planned_target === null || t.planned_target === undefined) return null
+  const entry = Number(t.entry_price)
+  const stop = Number(t.planned_stop)
+  const target = Number(t.planned_target)
+  const risk = t.direction === 'short' ? stop - entry : entry - stop
+  if (!risk) return null
+  const reward = t.direction === 'short' ? entry - target : target - entry
+  return reward / risk
+}
+
