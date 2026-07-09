@@ -8,6 +8,7 @@ const BLANK = {
   status: 'open', entry_date: '', exit_date: '', entry_time: '', exit_time: '',
   quantity: '', entry_price: '', exit_price: '', delta_entry: '', delta_exit: '',
   expiry_date: '', planned_target_pct: '50', planned_stop: '', planned_target: '',
+  currency: 'USD', fx_rate_to_usd: '1',
   fees: '', pnl: '', thesis: '', notes: '', parent_trade_id: null,
 }
 
@@ -48,6 +49,7 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       expiry_date: t.expiry_date ?? '',
       planned_target_pct: t.planned_target_pct ?? '',
       planned_stop: t.planned_stop ?? '', planned_target: t.planned_target ?? '',
+      currency: t.currency ?? 'USD', fx_rate_to_usd: t.fx_rate_to_usd ?? '1',
     })
     const existing = {}
     for (const c of checksByTrade[t.id] || []) existing[c.rule_id] = c.followed
@@ -91,6 +93,8 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
       planned_target_pct: isOption ? numOrNull(form.planned_target_pct) : null,
       planned_stop: !isOption ? numOrNull(form.planned_stop) : null,
       planned_target: !isOption ? numOrNull(form.planned_target) : null,
+      currency: form.currency,
+      fx_rate_to_usd: form.currency === 'USD' ? 1 : (numOrNull(form.fx_rate_to_usd) ?? 1),
       fees: numOrNull(form.fees) ?? 0,
       pnl: numOrNull(form.pnl),
       thesis: form.thesis || null,
@@ -227,7 +231,11 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
                       <td>{strategyById[t.strategy_id]?.name || <span className="muted">—</span>}</td>
                       <td><span className={`badge ${t.status === 'open' ? 'open' : ''}`}>{t.status}</span></td>
                       <td className={`num ${t.pnl === null ? 'muted' : t.pnl >= 0 ? 'gain' : 'loss'}`}>
-                        {t.pnl === null ? '—' : fmt(Number(t.pnl))}
+                        {t.pnl === null ? '—' : (
+                          <>
+                            {fmt(Number(t.pnl))}{t.currency !== 'USD' && <span className="muted small"> {t.currency}</span>}
+                          </>
+                        )}
                       </td>
                       <td><Ticks trade={t} checksByTrade={checksByTrade} /></td>
                     </tr>
@@ -278,6 +286,20 @@ export default function Trades({ trades, strategies, rulesByStrategy, checksByTr
                 <option>open</option><option>closed</option>
               </select>
             </div>
+            <div className="field">
+              <label>Currency</label>
+              <select value={form.currency} onChange={set('currency')}>
+                {['USD', 'SGD', 'GBP', 'EUR'].map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            {form.currency !== 'USD' && (
+              <div className="field">
+                <label>FX rate → USD</label>
+                <input inputMode="decimal" value={form.fx_rate_to_usd} onChange={set('fx_rate_to_usd')}
+                  placeholder="e.g. 0.7776" />
+                <span className="small muted">CMC ticket shows SGD-per-USD — enter 1 ÷ that number</span>
+              </div>
+            )}
             <div className="field">
               <label>Entry date</label>
               <input type="date" value={form.entry_date} onChange={set('entry_date')} />

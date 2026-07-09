@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import {
   computeStats, closedWithPnl, tradeAdherence, avgAdherence, fmt, fmtPct, fmtPF,
-  pctCaptured, dteAtExit, realizedR, plannedRR,
+  pctCaptured, dteAtExit, realizedR, plannedRR, usdPnl,
 } from '../lib/metrics.js'
 
 export default function Analytics({ trades, strategies, rules, checksByTrade }) {
@@ -18,7 +18,7 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
   const curve = useMemo(() => {
     let cum = 0
     return closed.map((t) => {
-      cum += Number(t.pnl)
+      cum += usdPnl(t)
       return { date: t.exit_date, equity: Math.round(cum * 100) / 100 }
     })
   }, [closed])
@@ -54,7 +54,7 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
       if (!t) continue
       for (const c of checks) {
         if (!acc[c.rule_id]) acc[c.rule_id] = { followed: [], broken: [] }
-        acc[c.rule_id][c.followed ? 'followed' : 'broken'].push(Number(t.pnl))
+        acc[c.rule_id][c.followed ? 'followed' : 'broken'].push(usdPnl(t))
       }
     }
     return Object.entries(acc)
@@ -157,7 +157,7 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
   return (
     <>
       <div className="statrow">
-        <Stat label="Total realized" value={fmt(all.total)} tone={all.total} />
+        <Stat label="Total realized (USD)" value={fmt(all.total)} tone={all.total} />
         <Stat label="Trades" value={all.count} />
         <Stat label="Win rate" value={fmtPct(all.winRate)} />
         <Stat label="Profit factor" value={fmtPF(all.profitFactor)} />
@@ -165,7 +165,7 @@ export default function Analytics({ trades, strategies, rules, checksByTrade }) 
       </div>
 
       <div className="card">
-        <h3>Equity curve — cumulative realized P&L</h3>
+        <h3>Equity curve — cumulative realized P&L (USD)</h3>
         <div style={{ width: '100%', height: 240 }}>
           <ResponsiveContainer>
             <LineChart data={curve} margin={{ top: 6, right: 10, bottom: 0, left: 0 }}>

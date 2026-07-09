@@ -10,21 +10,23 @@ export const fmtPct = (n) =>
 export const closedWithPnl = (trades) =>
   trades.filter((t) => t.status === 'closed' && t.pnl !== null && t.pnl !== undefined)
 
+export const usdPnl = (t) => Number(t.pnl) * Number(t.fx_rate_to_usd ?? 1)
+
 export function computeStats(trades) {
   const closed = closedWithPnl(trades)
-  const wins = closed.filter((t) => t.pnl > 0)
-  const losses = closed.filter((t) => t.pnl < 0)
-  const grossWin = wins.reduce((s, t) => s + Number(t.pnl), 0)
-  const grossLoss = Math.abs(losses.reduce((s, t) => s + Number(t.pnl), 0))
+  const wins = closed.filter((t) => usdPnl(t) > 0)
+  const losses = closed.filter((t) => usdPnl(t) < 0)
+  const grossWin = wins.reduce((s, t) => s + usdPnl(t), 0)
+  const grossLoss = Math.abs(losses.reduce((s, t) => s + usdPnl(t), 0))
   return {
     count: closed.length,
-    total: closed.reduce((s, t) => s + Number(t.pnl), 0),
+    total: closed.reduce((s, t) => s + usdPnl(t), 0),
     winRate: closed.length ? wins.length / closed.length : null,
     profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null,
     avgWin: wins.length ? grossWin / wins.length : null,
     avgLoss: losses.length ? -grossLoss / losses.length : null,
     expectancy: closed.length
-      ? closed.reduce((s, t) => s + Number(t.pnl), 0) / closed.length
+      ? closed.reduce((s, t) => s + usdPnl(t), 0) / closed.length
       : null,
   }
 }
@@ -73,7 +75,7 @@ export function buildChains(trades) {
     .filter((legs) => legs.length > 1) // only actual chains, single trades show in the normal list
     .map((legs) => {
       const closedLegs = legs.filter((l) => l.status === 'closed' && l.pnl !== null && l.pnl !== undefined)
-      const totalPnl = closedLegs.reduce((s, l) => s + Number(l.pnl), 0)
+      const totalPnl = closedLegs.reduce((s, l) => s + usdPnl(l), 0)
       const isOpen = legs.some((l) => l.status === 'open')
       const start = legs[0].entry_date
       const lastLeg = legs[legs.length - 1]

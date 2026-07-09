@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { computeStats, avgAdherence, tradeAdherence, fmt, fmtPct, fmtPF, todayStr } from '../lib/metrics.js'
+import { computeStats, avgAdherence, tradeAdherence, fmt, fmtPct, fmtPF, todayStr, usdPnl } from '../lib/metrics.js'
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -21,7 +21,7 @@ export default function Overview({ trades, checksByTrade, strategyById }) {
     for (const t of monthTrades) {
       const d = t.exit_date
       if (!out[d]) out[d] = { pnl: 0, trades: [] }
-      out[d].pnl += Number(t.pnl || 0)
+      out[d].pnl += usdPnl(t)
       out[d].trades.push(t)
     }
     return out
@@ -100,7 +100,7 @@ export default function Overview({ trades, checksByTrade, strategyById }) {
           })}
         </div>
         <div className="small muted" style={{ marginTop: 10 }}>
-          Realized P&L, booked on the exit date. Click a day to see its trades.
+          Realized P&L, booked on the exit date, normalized to USD. Click a day to see its trades in native currency.
         </div>
       </div>
 
@@ -116,7 +116,9 @@ export default function Overview({ trades, checksByTrade, strategyById }) {
                 <tr key={t.id}>
                   <td className="num">{t.symbol}</td>
                   <td>{strategyById[t.strategy_id]?.name || <span className="muted">—</span>}</td>
-                  <td className={`num ${t.pnl >= 0 ? 'gain' : 'loss'}`}>{fmt(Number(t.pnl))}</td>
+                  <td className={`num ${t.pnl >= 0 ? 'gain' : 'loss'}`}>
+                    {fmt(Number(t.pnl))}{t.currency !== 'USD' && <span className="muted small"> {t.currency}</span>}
+                  </td>
                   <td><Ticks trade={t} checksByTrade={checksByTrade} /></td>
                 </tr>
               ))}
